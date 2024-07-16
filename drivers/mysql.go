@@ -3,12 +3,10 @@ package drivers
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 
-	"github.com/jorgerojas26/lazysql/models"
-
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/jorgerojas26/lazysql/models"
 	"github.com/xo/dburl"
 )
 
@@ -348,98 +346,8 @@ func (db *MySQL) ExecuteDMLStatement(query string) (result string, err error) {
 	}
 }
 
-func (db *MySQL) ExecutePendingChanges(changes []models.DbDmlChange, inserts []models.DbInsert) (err error) {
-	queries := make([]string, 0, len(changes)+len(inserts))
-
-	// This will hold grouped changes by their RowId and Table
-	groupedUpdated := make(map[string][]models.DbDmlChange)
-	groupedDeletes := make([]models.DbDmlChange, 0, len(changes))
-
-	// Group changes by RowId and Table
-	for _, change := range changes {
-		switch change.Type {
-		case "UPDATE":
-			key := fmt.Sprintf("%s|%s|%s", change.Table, change.PrimaryKeyColumnName, change.PrimaryKeyValue)
-			groupedUpdated[key] = append(groupedUpdated[key], change)
-		case "DELETE":
-			groupedDeletes = append(groupedDeletes, change)
-		}
-	}
-
-	// Combine individual changes to SQL statements
-	for key, changes := range groupedUpdated {
-		columns := []string{}
-
-		// Split key into table and rowId
-		splitted := strings.Split(key, "|")
-		table := db.formatTableName(splitted[0])
-		primaryKeyColumnName := splitted[1]
-		primaryKeyValue := splitted[2]
-
-		for _, change := range changes {
-			columns = append(columns, fmt.Sprintf("%s='%s'", change.Column, change.Value))
-		}
-
-		// Merge all column updates
-		updateClause := strings.Join(columns, ", ")
-
-		query := fmt.Sprintf("UPDATE %s SET %s WHERE %s = '%s';", table, updateClause, primaryKeyColumnName, primaryKeyValue)
-
-		queries = append(queries, query)
-	}
-
-	for _, delete := range groupedDeletes {
-		statementType := ""
-		query := ""
-
-		statementType = "DELETE FROM"
-
-		query = fmt.Sprintf("%s %s WHERE %s = \"%s\"", statementType, db.formatTableName(delete.Table), delete.PrimaryKeyColumnName, delete.PrimaryKeyValue)
-
-		if query != "" {
-			queries = append(queries, query)
-		}
-	}
-
-	for _, insert := range inserts {
-		values := make([]string, 0, len(insert.Values))
-
-		for _, value := range insert.Values {
-			_, error := strconv.ParseFloat(value, 64)
-
-			if strings.ToLower(value) != "default" && error != nil {
-				values = append(values, fmt.Sprintf("\"%s\"", value))
-			} else {
-				values = append(values, value)
-			}
-		}
-
-		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", db.formatTableName(insert.Table), strings.Join(insert.Columns, ", "), strings.Join(values, ", "))
-
-		queries = append(queries, query)
-	}
-
-	tx, error := db.Connection.Begin()
-	if error != nil {
-		return error
-	}
-
-	for _, query := range queries {
-
-		_, err = tx.Exec(query)
-		if err != nil {
-			tx.Rollback()
-
-			return err
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-
-	return err
+func (db *MySQL) ExecutePendingChanges(changes []models.DbDmlChange) (err error) {
+	return nil
 }
 
 func (db *MySQL) SetProvider(provider string) {
